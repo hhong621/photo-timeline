@@ -9,8 +9,26 @@
   overflow: hidden;
 }
 
+.app--expanded {
+  overflow: visible;
+}
+
+.stage-stack {
+  position: relative;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+.app--expanded .stage-stack {
+  z-index: 1;
+  overflow: visible;
+}
+
 .stage {
   position: relative;
+  grid-area: 1 / 1;
   display: grid;
   place-items: center;
   padding: 1rem 1.25rem 2rem;
@@ -18,8 +36,23 @@
   overflow: hidden;
 }
 
-.stage:has(.hero-wrap) {
+.app--expanded .stage {
   overflow: visible;
+}
+
+.expand-ui {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 1rem 1.25rem 2rem;
+  min-height: 0;
+  pointer-events: none;
+}
+
+.expand-ui > * {
+  pointer-events: auto;
 }
 
 .stage-hint {
@@ -41,9 +74,13 @@
   z-index: 1;
   border: none;
   padding: 0;
-  cursor: pointer;
-  background: rgba(250, 250, 250, 0.72);
-  backdrop-filter: blur(4px);
+  cursor: default;
+  background: transparent;
+}
+
+.photo-shell {
+  line-height: 0;
+  overflow: hidden;
 }
 
 .hero-wrap {
@@ -54,9 +91,7 @@
   height: fit-content;
   max-width: var(--hero-landscape-width);
   max-height: var(--hero-max-height);
-  line-height: 0;
   border-radius: 16px;
-  overflow: hidden;
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.12),
     0 0 0 1px var(--border);
@@ -118,15 +153,15 @@
 }
 
 .timeline-shell {
-  position: sticky;
-  bottom: 0;
-  z-index: 50;
-  isolation: isolate;
+  position: relative;
   width: 100%;
   min-width: 0;
   padding: 0.75rem 0 1.25rem;
   background: var(--bg);
-  overflow-x: clip;
+}
+
+.app--expanded .timeline-shell {
+  overflow: visible;
 }
 
 .timeline-track {
@@ -135,12 +170,17 @@
   max-width: 100%;
   padding: 0 1rem 0.25rem;
   overflow-x: auto;
-  overflow-y: clip;
+  overflow-y: visible;
   scroll-snap-type: x mandatory;
   scroll-padding-inline: 1rem;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.app--expanded .timeline-track {
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .timeline-track__content {
@@ -245,15 +285,12 @@
 
 .timeline-item__media {
   display: block;
-  line-height: 0;
   border-radius: 10px;
-  overflow: hidden;
 }
 
 .timeline-item--selected .timeline-item__media {
   position: relative;
-  overflow: visible;
-  z-index: 3;
+  z-index: 1;
 }
 
 .timeline-item > .photo-frame--thumb {
@@ -263,7 +300,6 @@
 }
 
 .timeline-item--selected > .timeline-item__media > .photo-frame--thumb {
-  opacity: 0.35;
   box-shadow: 0 0 0 2px var(--accent);
 }
 

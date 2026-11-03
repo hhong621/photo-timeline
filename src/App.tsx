@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { photos, type Photo } from './photos'
@@ -101,55 +101,56 @@ function App() {
   }, [selected, close])
 
   return (
-    <div className="app">
-      <main className="stage" aria-live="polite">
-        <motion.p
-          className="stage-hint"
-          aria-hidden={selected ? true : undefined}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: selected ? 0 : 1 }}
-          transition={{ duration: 0.2 }}
-        >
-          Select a photo from the timeline
-        </motion.p>
-        <AnimatePresence>
-          {selected ? (
-            <>
-              <motion.button
-                type="button"
-                className="backdrop"
-                aria-label="Close expanded photo"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={close}
-              />
-              <motion.div
-                className="hero-wrap"
-                layoutId={selected.id}
-                role="dialog"
-                aria-modal="false"
-                aria-label={selected.label}
-              >
-                <PhotoFrame photo={selected} variant="hero" />
+    <div className={`app${selected ? ' app--expanded' : ''}`}>
+      <LayoutGroup>
+        <div className="stage-stack">
+          <main className="stage" aria-live="polite">
+            <motion.p
+              className="stage-hint"
+              aria-hidden={selected ? true : undefined}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: selected ? 0 : 1 }}
+              transition={{ duration: 0.2 }}
+            >
+              Select a photo from the timeline
+            </motion.p>
+          </main>
+          <AnimatePresence>
+            {selected ? (
+              <div className="expand-ui">
                 <button
                   type="button"
-                  className="hero-close"
+                  className="backdrop"
+                  aria-label="Close expanded photo"
                   onClick={close}
-                  aria-label="Close"
+                />
+                <motion.div
+                  className="hero-wrap photo-shell"
+                  layoutId={selected.id}
+                  role="dialog"
+                  aria-modal="false"
+                  aria-label={selected.label}
                 >
-                  ×
-                </button>
-              </motion.div>
-            </>
-          ) : null}
-        </AnimatePresence>
-      </main>
+                  <PhotoFrame photo={selected} variant="hero" />
+                  <button
+                    type="button"
+                    className="hero-close"
+                    onClick={close}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </motion.div>
+              </div>
+            ) : null}
+          </AnimatePresence>
+        </div>
 
-      <footer className="timeline-shell">
-        <div
+        <footer className="timeline-shell">
+        <motion.div
           ref={trackRef}
           className="timeline-track"
+          layoutScroll
           role="list"
           aria-label="Photo timeline"
           onScroll={syncScrollRatio}
@@ -171,7 +172,10 @@ function App() {
                 whileTap={{ scale: 0.98 }}
                 layout={false}
               >
-                <motion.div className="timeline-item__media" layoutId={photo.id}>
+                <motion.div
+                  className="timeline-item__media photo-shell"
+                  layoutId={photo.id}
+                >
                   <PhotoFrame
                     photo={photo}
                     variant="thumb"
@@ -183,7 +187,7 @@ function App() {
             )
           })}
           </div>
-        </div>
+        </motion.div>
         {canScrub ? (
           <label className="timeline-scrubber-wrap">
             <span className="visually-hidden">Scrub timeline</span>
@@ -201,7 +205,8 @@ function App() {
             />
           </label>
         ) : null}
-      </footer>
+        </footer>
+      </LayoutGroup>
     </div>
   )
 }
