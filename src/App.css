@@ -51,7 +51,11 @@
   pointer-events: none;
 }
 
-.expand-ui > * {
+.expand-ui:not(.expand-ui--active) > * {
+  pointer-events: none;
+}
+
+.expand-ui--active > * {
   pointer-events: auto;
 }
 
@@ -83,9 +87,17 @@
   overflow: hidden;
 }
 
+.expand-hero {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
 .hero-wrap {
   position: relative;
-  z-index: 2;
   display: inline-block;
   width: fit-content;
   height: fit-content;
@@ -95,13 +107,17 @@
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.12),
     0 0 0 1px var(--border);
+  grid-area: 1 / 1;
+  pointer-events: auto;
 }
 
 .hero-close {
   position: absolute;
-  top: 0.65rem;
-  right: 0.65rem;
-  z-index: 2;
+  left: 50%;
+  bottom: 100%;
+  z-index: 3;
+  translate: -50% 0;
+  margin-bottom: 0.65rem;
   width: 2rem;
   height: 2rem;
   display: grid;
@@ -162,6 +178,7 @@
 
 .app--expanded .timeline-shell {
   overflow: visible;
+  z-index: 2;
 }
 
 .timeline-track {
@@ -300,7 +317,7 @@
 }
 
 .timeline-item--selected > .timeline-item__media > .photo-frame--thumb {
-  box-shadow: 0 0 0 2px var(--accent);
+  opacity: 0;
 }
 
 .timeline-item__date {

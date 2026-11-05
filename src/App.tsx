@@ -43,10 +43,13 @@ function PhotoFrame({
 
 function App() {
   const [selected, setSelected] = useState<Photo | null>(null)
+  const [heroExpanded, setHeroExpanded] = useState(false)
+  const [stageOpen, setStageOpen] = useState(false)
   const [scrollRatio, setScrollRatio] = useState(0)
   const [canScrub, setCanScrub] = useState(false)
   const trackRef = useRef<HTMLDivElement>(null)
   const trackContentRef = useRef<HTMLDivElement>(null)
+  const closeRequestedRef = useRef(false)
 
   const syncScrollRatio = useCallback(() => {
     const track = trackRef.current
@@ -73,7 +76,34 @@ function App() {
     [],
   )
 
-  const close = useCallback(() => setSelected(null), [])
+  const commitClose = useCallback(() => {
+    setSelected(null)
+  }, [])
+
+  const close = useCallback(() => {
+    closeRequestedRef.current = true
+    commitClose()
+  }, [commitClose])
+
+  useEffect(() => {
+    if (selected) {
+      closeRequestedRef.current = false
+      setStageOpen(true)
+    }
+  }, [selected?.id])
+
+  useEffect(() => {
+    if (!selected) setHeroExpanded(false)
+  }, [selected])
+
+  const onHeroLayoutComplete = useCallback(() => {
+    if (closeRequestedRef.current) {
+      setStageOpen(false)
+      closeRequestedRef.current = false
+      return
+    }
+    setHeroExpanded(true)
+  }, [])
 
   useEffect(() => {
     const track = trackRef.current
@@ -101,7 +131,7 @@ function App() {
   }, [selected, close])
 
   return (
-    <div className={`app${selected ? ' app--expanded' : ''}`}>
+    <div className={`app${selected || stageOpen ? ' app--expanded' : ''}`}>
       <LayoutGroup>
         <div className="stage-stack">
           <main className="stage" aria-live="polite">
@@ -115,38 +145,59 @@ function App() {
               Select a photo from the timeline
             </motion.p>
           </main>
-          <AnimatePresence>
+          <div
+            className={`expand-ui${selected ? ' expand-ui--active' : ''}`}
+          >
             {selected ? (
-              <div className="expand-ui">
-                <button
-                  type="button"
-                  className="backdrop"
-                  aria-label="Close expanded photo"
-                  onClick={close}
-                />
-                <motion.div
-                  className="hero-wrap photo-shell"
-                  layoutId={selected.id}
-                  role="dialog"
-                  aria-modal="false"
-                  aria-label={selected.label}
-                >
-                  <PhotoFrame photo={selected} variant="hero" />
-                  <button
-                    type="button"
-                    className="hero-close"
-                    onClick={close}
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
-                </motion.div>
-              </div>
+              <button
+                type="button"
+                className="backdrop"
+                aria-label="Close expanded photo"
+                onClick={close}
+              />
             ) : null}
-          </AnimatePresence>
+            <div
+              className="expand-hero"
+              role={selected ? 'dialog' : undefined}
+              aria-modal="false"
+              aria-label={selected?.label}
+              aria-hidden={selected ? undefined : true}
+            >
+              <AnimatePresence mode="sync" initial={false}>
+                {selected ? (
+                  <motion.div
+                    key={selected.id}
+                    className="hero-wrap photo-shell"
+                    layoutId={selected.id}
+                    onLayoutAnimationComplete={onHeroLayoutComplete}
+                  >
+                    <PhotoFrame photo={selected} variant="hero" />
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
 
         <footer className="timeline-shell">
+        {selected ? (
+          <motion.button
+            type="button"
+            className="hero-close"
+            onClick={close}
+            aria-label="Close"
+            aria-hidden={!heroExpanded}
+            tabIndex={heroExpanded ? 0 : -1}
+            initial={false}
+            animate={{
+              opacity: heroExpanded ? 1 : 0,
+              pointerEvents: heroExpanded ? 'auto' : 'none',
+            }}
+            transition={{ duration: 0.2 }}
+          >
+            ×
+          </motion.button>
+        ) : null}
         <motion.div
           ref={trackRef}
           className="timeline-track"
