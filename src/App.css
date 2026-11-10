@@ -22,7 +22,8 @@
 }
 
 .app--expanded .stage-stack {
-  z-index: 1;
+  /* Above footer so shared layout paints continuously both directions */
+  z-index: 2;
   overflow: visible;
 }
 
@@ -114,10 +115,9 @@
 .hero-close {
   position: absolute;
   left: 50%;
-  bottom: 100%;
-  z-index: 3;
-  translate: -50% 0;
-  margin-bottom: 0.65rem;
+  bottom: 0;
+  z-index: 4;
+  translate: -50% calc(-100% - 0.65rem);
   width: 2rem;
   height: 2rem;
   display: grid;
@@ -178,7 +178,7 @@
 
 .app--expanded .timeline-shell {
   overflow: visible;
-  z-index: 2;
+  z-index: 1;
 }
 
 .timeline-track {
