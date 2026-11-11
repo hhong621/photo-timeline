@@ -3,6 +3,59 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import { photos, type Photo } from './photos'
 
+function formatPhotoDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}
+
+function HeroMeta({
+  photo,
+  visible,
+}: {
+  photo: Photo
+  visible: boolean
+}) {
+  const rows: { label: string; value: string }[] = [
+    { label: 'Location', value: photo.location },
+    { label: 'Date', value: formatPhotoDate(photo.date) },
+    { label: 'Camera', value: photo.camera },
+    { label: 'Focal length', value: photo.focalLength },
+    { label: 'Aperture', value: photo.aperture },
+    { label: 'Shutter speed', value: photo.shutterSpeed },
+  ]
+
+  return (
+    <motion.aside
+      className="hero-meta"
+      aria-hidden={!visible}
+      initial={false}
+      animate={{
+        opacity: visible ? 1 : 0,
+        x: visible ? 0 : 8,
+      }}
+      transition={
+        visible
+          ? { duration: 0.2, ease: 'easeOut' }
+          : { duration: 0.05, ease: 'easeOut' }
+      }
+      style={{ pointerEvents: visible ? 'auto' : 'none' }}
+    >
+      <dl className="hero-meta__list">
+        {rows.map(({ label, value }) => (
+          <div key={label} className="hero-meta__row">
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </motion.aside>
+  )
+}
+
 function isPortraitAspect(aspectRatio: string) {
   const parts = aspectRatio.split('/').map((part) => Number(part.trim()))
   if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n <= 0)) {
@@ -44,12 +97,14 @@ function PhotoFrame({
 function App() {
   const [selected, setSelected] = useState<Photo | null>(null)
   const [heroExpanded, setHeroExpanded] = useState(false)
+  const [showMeta, setShowMeta] = useState(false)
   const [stageOpen, setStageOpen] = useState(false)
   const [scrollRatio, setScrollRatio] = useState(0)
   const [canScrub, setCanScrub] = useState(false)
   const trackRef = useRef<HTMLDivElement>(null)
   const trackContentRef = useRef<HTMLDivElement>(null)
   const closeRequestedRef = useRef(false)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const syncScrollRatio = useCallback(() => {
     const track = trackRef.current
@@ -82,18 +137,37 @@ function App() {
 
   const close = useCallback(() => {
     closeRequestedRef.current = true
-    commitClose()
+    setShowMeta(false)
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null
+      commitClose()
+    }, 60)
   }, [commitClose])
 
   useEffect(() => {
     if (selected) {
       closeRequestedRef.current = false
       setStageOpen(true)
+      setShowMeta(true)
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current)
+        closeTimerRef.current = null
+      }
     }
   }, [selected?.id])
 
   useEffect(() => {
-    if (!selected) setHeroExpanded(false)
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selected) {
+      setHeroExpanded(false)
+      setShowMeta(false)
+    }
   }, [selected])
 
   const onHeroLayoutComplete = useCallback(() => {
@@ -183,6 +257,15 @@ function App() {
               </div>
             </div>
             {selected ? (
+              <div className="hero-meta-panel">
+                <HeroMeta
+                  key={selected.id}
+                  photo={selected}
+                  visible={showMeta}
+                />
+              </div>
+            ) : null}
+            {selected ? (
               <motion.button
                 type="button"
                 className="hero-close"
@@ -244,7 +327,6 @@ function App() {
                       useHeroSrc={isSelected}
                     />
                   </motion.div>
-                  <span className="timeline-item__date">{photo.date}</span>
                 </motion.button>
               )
             })}
