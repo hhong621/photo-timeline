@@ -160,11 +160,10 @@
 }
 
 .hero-close {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
+  position: fixed;
+  top: 1rem;
+  right: 1.25rem;
   z-index: 4;
-  translate: -50% calc(-100% - 0.65rem);
   width: 2rem;
   height: 2rem;
   display: grid;
