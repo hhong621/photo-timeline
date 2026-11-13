@@ -104,7 +104,7 @@
   height: fit-content;
   max-width: var(--hero-landscape-width);
   max-height: var(--hero-max-height);
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.12),
     0 0 0 1px var(--border);
@@ -164,23 +164,35 @@
   top: 1rem;
   right: 1.25rem;
   z-index: 4;
-  width: 2rem;
-  height: 2rem;
-  display: grid;
-  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: none;
   border-radius: 999px;
   cursor: pointer;
-  font-size: 1.35rem;
-  line-height: 1;
   color: var(--text-h);
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 0 1px var(--border);
-  transition: background 0.15s ease;
+  box-shadow: 
+    0 0 1px rgba(0, 0, 0, 0.25), 
+    0 1px 2px rgba(0, 0, 0, 0.16);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .hero-close:hover {
   background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+}
+
+.hero-close__icon {
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
 }
 
 .photo-frame {
@@ -348,7 +360,7 @@
 
 .timeline-item__media {
   display: block;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
 .timeline-item--selected .timeline-item__media {

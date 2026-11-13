@@ -96,7 +96,6 @@ function PhotoFrame({
 
 function App() {
   const [selected, setSelected] = useState<Photo | null>(null)
-  const [heroExpanded, setHeroExpanded] = useState(false)
   const [showMeta, setShowMeta] = useState(false)
   const [stageOpen, setStageOpen] = useState(false)
   const [scrollRatio, setScrollRatio] = useState(0)
@@ -165,7 +164,6 @@ function App() {
 
   useEffect(() => {
     if (!selected) {
-      setHeroExpanded(false)
       setShowMeta(false)
     }
   }, [selected])
@@ -174,9 +172,7 @@ function App() {
     if (closeRequestedRef.current) {
       setStageOpen(false)
       closeRequestedRef.current = false
-      return
     }
-    setHeroExpanded(true)
   }, [])
 
   useEffect(() => {
@@ -271,16 +267,25 @@ function App() {
                 className="hero-close"
                 onClick={close}
                 aria-label="Close"
-                aria-hidden={!heroExpanded}
-                tabIndex={heroExpanded ? 0 : -1}
-                initial={false}
-                animate={{
-                  opacity: heroExpanded ? 1 : 0,
-                  pointerEvents: heroExpanded ? 'auto' : 'none',
-                }}
-                transition={{ duration: 0.2 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
               >
-                ×
+                <svg
+                  className="hero-close__icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M6 6l12 12M18 6 6 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </motion.button>
             ) : null}
           </div>
