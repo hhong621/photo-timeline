@@ -1,7 +1,16 @@
 import { AnimatePresence, LayoutGroup, MotionConfig,motion } from 'motion/react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { photos, type Photo } from './photos'
+import { TimeScrubber } from './TimeScrubber'
+import { getTimelineSnapRatios, nearestSnapRatio } from './timelineScale'
+
+const SNAP_SCROLL_MS = 480
+const TRACK_SNAP_IDLE_MS = 160
+
+function easeOutCubic(t: number) {
+  return 1 - (1 - t) ** 3
+}
 
 function formatPhotoDate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -104,8 +113,36 @@ function App() {
   const trackContentRef = useRef<HTMLDivElement>(null)
   const closeRequestedRef = useRef(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const ignoreScrollSyncRef = useRef(false)
+  const trackSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const scrubberActiveRef = useRef(false)
+  const snapAnimatingRef = useRef(false)
+  const scrollAnimRef = useRef<number | null>(null)
+  const snapRatios = useMemo(() => getTimelineSnapRatios(photos), [])
 
-  const syncScrollRatio = useCallback(() => {
+  const cancelSnapAnimation = useCallback(() => {
+    if (scrollAnimRef.current !== null) {
+      cancelAnimationFrame(scrollAnimRef.current)
+      scrollAnimRef.current = null
+    }
+    snapAnimatingRef.current = false
+  }, [])
+
+  const readScrollRatio = useCallback(() => {
+    const track = trackRef.current
+    if (!track) return scrollRatio
+
+    const maxScroll = track.scrollWidth - track.clientWidth
+    if (maxScroll <= 1) return 0
+
+    return track.scrollLeft / maxScroll
+  }, [scrollRatio])
+
+  const syncScrollRatio = useCallback((force = false) => {
+    if (!force && (ignoreScrollSyncRef.current || snapAnimatingRef.current)) {
+      return
+    }
+
     const track = trackRef.current
     if (!track) return
 
@@ -116,7 +153,7 @@ function App() {
   }, [])
 
   const scrubTimeline = useCallback(
-    (ratio: number) => {
+    (ratio: number, commit = true, smooth = false) => {
       const track = trackRef.current
       if (!track) return
 
@@ -124,11 +161,124 @@ function App() {
       if (maxScroll <= 0) return
 
       const clamped = Math.min(1, Math.max(0, ratio))
-      track.scrollLeft = clamped * maxScroll
-      setScrollRatio(clamped)
+      const targetLeft = clamped * maxScroll
+
+      if (!smooth) {
+        cancelSnapAnimation()
+        ignoreScrollSyncRef.current = true
+        track.scrollLeft = targetLeft
+        if (commit) {
+          setScrollRatio(clamped)
+        }
+        requestAnimationFrame(() => {
+          ignoreScrollSyncRef.current = false
+        })
+        return
+      }
+
+      const startLeft = track.scrollLeft
+      if (Math.abs(startLeft - targetLeft) < 0.5) {
+        if (commit) setScrollRatio(clamped)
+        return
+      }
+
+      cancelSnapAnimation()
+      snapAnimatingRef.current = true
+      const startedAt = performance.now()
+
+      const step = (now: number) => {
+        const elapsed = now - startedAt
+        const progress = Math.min(1, elapsed / SNAP_SCROLL_MS)
+        const eased = easeOutCubic(progress)
+        const nextLeft = startLeft + (targetLeft - startLeft) * eased
+
+        track.scrollLeft = nextLeft
+        if (commit) {
+          setScrollRatio(nextLeft / maxScroll)
+        }
+
+        if (progress < 1) {
+          scrollAnimRef.current = requestAnimationFrame(step)
+          return
+        }
+
+        scrollAnimRef.current = null
+        snapAnimatingRef.current = false
+        track.scrollLeft = targetLeft
+        if (commit) {
+          setScrollRatio(clamped)
+        }
+      }
+
+      scrollAnimRef.current = requestAnimationFrame(step)
     },
-    [],
+    [cancelSnapAnimation],
   )
+
+  const snapTrackToTick = useCallback(() => {
+    if (
+      ignoreScrollSyncRef.current ||
+      scrubberActiveRef.current ||
+      snapAnimatingRef.current
+    ) {
+      return
+    }
+
+    const track = trackRef.current
+    if (!track) return
+
+    const maxScroll = track.scrollWidth - track.clientWidth
+    if (maxScroll <= 1) return
+
+    const ratio = track.scrollLeft / maxScroll
+    const snapped = nearestSnapRatio(snapRatios, ratio)
+    if (Math.abs(snapped - ratio) > 1e-4) {
+      scrubTimeline(snapped, true, true)
+    }
+  }, [scrubTimeline, snapRatios])
+
+  const scheduleTrackSnap = useCallback(() => {
+    if (trackSnapTimerRef.current) {
+      clearTimeout(trackSnapTimerRef.current)
+    }
+    trackSnapTimerRef.current = window.setTimeout(() => {
+      trackSnapTimerRef.current = null
+      snapTrackToTick()
+    }, TRACK_SNAP_IDLE_MS)
+  }, [snapTrackToTick])
+
+  const onTrackScroll = useCallback(() => {
+    if (scrubberActiveRef.current || snapAnimatingRef.current) return
+    if (ignoreScrollSyncRef.current) return
+
+    syncScrollRatio()
+    scheduleTrackSnap()
+  }, [scheduleTrackSnap, syncScrollRatio])
+
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track) return
+
+    const onScrollEnd = () => {
+      if (snapAnimatingRef.current) return
+
+      if (trackSnapTimerRef.current) {
+        clearTimeout(trackSnapTimerRef.current)
+        trackSnapTimerRef.current = null
+      }
+      snapTrackToTick()
+    }
+
+    track.addEventListener('scrollend', onScrollEnd)
+    return () => {
+      track.removeEventListener('scrollend', onScrollEnd)
+      if (trackSnapTimerRef.current) {
+        clearTimeout(trackSnapTimerRef.current)
+        trackSnapTimerRef.current = null
+      }
+      cancelSnapAnimation()
+    }
+  }, [cancelSnapAnimation, snapTrackToTick])
 
   const commitClose = useCallback(() => {
     setSelected(null)
@@ -182,7 +332,7 @@ function App() {
 
     syncScrollRatio()
 
-    const observer = new ResizeObserver(syncScrollRatio)
+    const observer = new ResizeObserver(() => syncScrollRatio())
     observer.observe(track)
     if (content) observer.observe(content)
 
@@ -297,7 +447,7 @@ function App() {
             layoutScroll
             role="list"
             aria-label="Photo timeline"
-            onScroll={syncScrollRatio}
+            onScroll={onTrackScroll}
           >
             <div ref={trackContentRef} className="timeline-track__content">
             {photos.map((photo) => {
@@ -338,21 +488,22 @@ function App() {
             </div>
           </motion.div>
           {canScrub ? (
-            <label className="timeline-scrubber-wrap">
-              <span className="visually-hidden">Scrub timeline</span>
-              <input
-                type="range"
-                className="timeline-scrubber"
-                min={0}
-                max={1000}
-                step={1}
-                value={Math.round(scrollRatio * 1000)}
-                onChange={(event) =>
-                  scrubTimeline(Number(event.target.value) / 1000)
+            <TimeScrubber
+              scrollRatio={scrollRatio}
+              onScrub={scrubTimeline}
+              readScrollRatio={readScrollRatio}
+              onDragActive={(active) => {
+                scrubberActiveRef.current = active
+                if (active) {
+                  cancelSnapAnimation()
+                  if (trackSnapTimerRef.current) {
+                    clearTimeout(trackSnapTimerRef.current)
+                    trackSnapTimerRef.current = null
+                  }
                 }
-                aria-valuetext={`${Math.round(scrollRatio * 100)} percent`}
-              />
-            </label>
+              }}
+              photos={photos}
+            />
           ) : null}
           </footer>
         </LayoutGroup>
