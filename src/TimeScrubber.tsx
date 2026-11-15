@@ -14,6 +14,7 @@ const MIN_FLING_PX_PER_SEC = 140
 const FLING_FRICTION = 4.2
 const FLING_STOP_RATIO_PER_SEC = 0.015
 const EDGE_SNAP_EPSILON = 1 / 1200
+const WHEEL_SNAP_IDLE_MS = 160
 
 type VelocitySample = { x: number; t: number }
 
@@ -60,6 +61,7 @@ export function TimeScrubber({
   const dragStartRef = useRef({ pointerX: 0, translateX: 0 })
   const metricsRef = useRef({ viewportWidth: 0, contentWidth: 0 })
   const gestureGenerationRef = useRef(0)
+  const wheelSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const bounds = useMemo(() => buildTimelineMarkers(photos), [photos])
 
@@ -250,7 +252,70 @@ export function TimeScrubber({
     ],
   )
 
-  useEffect(() => cancelFling, [cancelFling])
+  useEffect(() => {
+    return () => {
+      cancelFling()
+      if (wheelSnapTimerRef.current) {
+        clearTimeout(wheelSnapTimerRef.current)
+        wheelSnapTimerRef.current = null
+      }
+    }
+  }, [cancelFling])
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport || contentWidth <= 0) return
+
+    const onWheel = (event: WheelEvent) => {
+      const delta =
+        Math.abs(event.deltaX) >= Math.abs(event.deltaY)
+          ? event.deltaX
+          : event.shiftKey
+            ? event.deltaY
+            : null
+      if (delta === null || delta === 0) return
+
+      event.preventDefault()
+      event.stopPropagation()
+
+      gestureGenerationRef.current += 1
+      cancelFling()
+      onDragActive?.(true)
+
+      const { contentWidth: cw } = metricsRef.current
+      if (cw <= 0) return
+
+      const liveRatio = readScrollRatio()
+      const nextRatio = Math.min(
+        1,
+        Math.max(0, liveRatio + delta / cw),
+      )
+
+      setBandTranslate(translateFromRatio(nextRatio))
+      onScrub(nextRatio, false)
+
+      if (wheelSnapTimerRef.current) {
+        clearTimeout(wheelSnapTimerRef.current)
+      }
+      wheelSnapTimerRef.current = window.setTimeout(() => {
+        wheelSnapTimerRef.current = null
+        if (draggingRef.current || flingingRef.current) return
+        settleToSnap(readScrollRatio())
+      }, WHEEL_SNAP_IDLE_MS)
+    }
+
+    viewport.addEventListener('wheel', onWheel, { passive: false })
+    return () => viewport.removeEventListener('wheel', onWheel)
+  }, [
+    cancelFling,
+    contentWidth,
+    onDragActive,
+    onScrub,
+    readScrollRatio,
+    setBandTranslate,
+    settleToSnap,
+    translateFromRatio,
+  ])
 
   useEffect(() => {
     const stopCoast = () => {
@@ -274,7 +339,9 @@ export function TimeScrubber({
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
       if (contentWidth <= 0) return
+      if (event.button !== 0) return
 
+      event.preventDefault()
       gestureGenerationRef.current += 1
       onDragActive?.(true)
       cancelFling()

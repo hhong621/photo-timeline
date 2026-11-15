@@ -5,7 +5,7 @@ import { photos, type Photo } from './photos'
 import { TimeScrubber } from './TimeScrubber'
 import { getTimelineSnapRatios, nearestSnapRatio } from './timelineScale'
 
-const SNAP_SCROLL_MS = 480
+const SNAP_SCROLL_MS = 300
 const TRACK_SNAP_IDLE_MS = 160
 const EDGE_SNAP_EPSILON = 1 / 1200
 
@@ -280,6 +280,7 @@ function App() {
   const onTrackScroll = useCallback(() => {
     if (scrubberActiveRef.current && !trackUserScrollRef.current) return
     if (ignoreScrollSyncRef.current) return
+    if (snapAnimatingRef.current) return
 
     trackUserScrollRef.current = true
     scrubberDroveRef.current = false
@@ -319,9 +320,13 @@ function App() {
     [onTrackUserIntent],
   )
 
-  const onTimelineShellPointerDownCapture = useCallback(() => {
-    interruptTimeline()
-  }, [interruptTimeline])
+  const onTimelineShellPointerDownCapture = useCallback(
+    (event: React.PointerEvent) => {
+      if ((event.target as HTMLElement).closest('.time-scrubber')) return
+      interruptTimeline()
+    },
+    [interruptTimeline],
+  )
 
   useEffect(() => {
     const track = trackRef.current

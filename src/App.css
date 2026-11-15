@@ -279,10 +279,12 @@
   position: relative;
   width: 300px;
   height: 2.85rem;
-  margin: 0.65rem auto 0;
+  margin: 1.25rem auto 0;
   overflow: hidden;
   touch-action: none;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
   outline: none;
   -webkit-mask-image: linear-gradient(
     to right,
@@ -314,13 +316,16 @@
 .time-scrubber__playhead {
   position: absolute;
   z-index: 2;
-  top: 0.12rem;
   left: 50%;
-  width: 2px;
-  height: 1.55rem;
-  margin-left: -1px;
-  border-radius: 1px;
-  background: var(--scrubber-playhead);
+  width: 8px;
+  height: 1.75rem;
+  margin-left: -4px;
+  border-radius: 4px;
+  border: 2px solid var(--scrubber-playhead);
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.25), 
+    0 0 1px rgba(0, 0, 0, 0.1);
   pointer-events: none;
 }
 
@@ -335,24 +340,24 @@
 .time-scrubber__tick {
   position: absolute;
   top: 0.35rem;
-  width: 1px;
+  width: 2px;
   transform: translateX(-50%);
   border-radius: 1px;
-  background: #c8c8ce;
+  background: #3f3f46;
 }
 
 .time-scrubber__tick--minor {
-  height: 0.45rem;
+  height: 0.75rem;
   opacity: 0.9;
 }
 
 .time-scrubber__tick--mid {
-  height: 0.62rem;
-  background: #a1a1aa;
+  height: 1rem;
+  background: #3f3f46;
 }
 
 .time-scrubber__tick--major {
-  height: 0.85rem;
+  height: 1.25rem;
   background: #3f3f46;
 }
 
@@ -366,7 +371,7 @@
 }
 
 .time-scrubber__label {
-  margin-top: 1.35rem;
+  margin-top: 1.8rem;
   font-size: 0.78rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
