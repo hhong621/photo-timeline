@@ -247,6 +247,8 @@
   overflow-x: auto;
   overflow-y: visible;
   scroll-padding-inline: 1rem;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   -ms-overflow-style: none;

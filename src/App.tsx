@@ -7,6 +7,7 @@ import { getTimelineSnapRatios, nearestSnapRatio } from './timelineScale'
 
 const SNAP_SCROLL_MS = 480
 const TRACK_SNAP_IDLE_MS = 160
+const EDGE_SNAP_EPSILON = 1 / 1200
 
 function easeOutCubic(t: number) {
   return 1 - (1 - t) ** 3
@@ -116,6 +117,10 @@ function App() {
   const ignoreScrollSyncRef = useRef(false)
   const trackSnapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrubberActiveRef = useRef(false)
+  const scrubberDroveRef = useRef(false)
+  const scrubberAbortRef = useRef<(() => void) | null>(null)
+  const trackGestureRef = useRef(0)
+  const trackUserScrollRef = useRef(false)
   const snapAnimatingRef = useRef(false)
   const scrollAnimRef = useRef<number | null>(null)
   const snapRatios = useMemo(() => getTimelineSnapRatios(photos), [])
@@ -164,15 +169,19 @@ function App() {
       const targetLeft = clamped * maxScroll
 
       if (!smooth) {
-        cancelSnapAnimation()
-        ignoreScrollSyncRef.current = true
+        if (scrubberActiveRef.current) {
+          cancelSnapAnimation()
+        }
         track.scrollLeft = targetLeft
         if (commit) {
           setScrollRatio(clamped)
         }
-        requestAnimationFrame(() => {
-          ignoreScrollSyncRef.current = false
-        })
+        if (!scrubberActiveRef.current) {
+          ignoreScrollSyncRef.current = true
+          requestAnimationFrame(() => {
+            ignoreScrollSyncRef.current = false
+          })
+        }
         return
       }
 
@@ -187,6 +196,16 @@ function App() {
       const startedAt = performance.now()
 
       const step = (now: number) => {
+        if (
+          !snapAnimatingRef.current ||
+          scrubberActiveRef.current ||
+          trackUserScrollRef.current
+        ) {
+          snapAnimatingRef.current = false
+          scrollAnimRef.current = null
+          return
+        }
+
         const elapsed = now - startedAt
         const progress = Math.min(1, elapsed / SNAP_SCROLL_MS)
         const eased = easeOutCubic(progress)
@@ -219,6 +238,7 @@ function App() {
     if (
       ignoreScrollSyncRef.current ||
       scrubberActiveRef.current ||
+      scrubberDroveRef.current ||
       snapAnimatingRef.current
     ) {
       return
@@ -231,7 +251,14 @@ function App() {
     if (maxScroll <= 1) return
 
     const ratio = track.scrollLeft / maxScroll
-    const snapped = nearestSnapRatio(snapRatios, ratio)
+    let snapped: number
+    if (ratio <= EDGE_SNAP_EPSILON) {
+      snapped = 0
+    } else if (ratio >= 1 - EDGE_SNAP_EPSILON) {
+      snapped = 1
+    } else {
+      snapped = nearestSnapRatio(snapRatios, ratio)
+    }
     if (Math.abs(snapped - ratio) > 1e-4) {
       scrubTimeline(snapped, true, true)
     }
@@ -241,32 +268,81 @@ function App() {
     if (trackSnapTimerRef.current) {
       clearTimeout(trackSnapTimerRef.current)
     }
+    const gesture = trackGestureRef.current
     trackSnapTimerRef.current = window.setTimeout(() => {
       trackSnapTimerRef.current = null
+      if (trackGestureRef.current !== gesture) return
+      if (scrubberActiveRef.current || scrubberDroveRef.current) return
       snapTrackToTick()
     }, TRACK_SNAP_IDLE_MS)
   }, [snapTrackToTick])
 
   const onTrackScroll = useCallback(() => {
-    if (scrubberActiveRef.current || snapAnimatingRef.current) return
+    if (scrubberActiveRef.current && !trackUserScrollRef.current) return
     if (ignoreScrollSyncRef.current) return
+
+    trackUserScrollRef.current = true
+    scrubberDroveRef.current = false
+    cancelSnapAnimation()
+    if (trackSnapTimerRef.current) {
+      clearTimeout(trackSnapTimerRef.current)
+      trackSnapTimerRef.current = null
+    }
 
     syncScrollRatio()
     scheduleTrackSnap()
-  }, [scheduleTrackSnap, syncScrollRatio])
+  }, [cancelSnapAnimation, scheduleTrackSnap, syncScrollRatio])
+
+  const interruptTimeline = useCallback(() => {
+    scrubberAbortRef.current?.()
+    cancelSnapAnimation()
+    if (trackSnapTimerRef.current) {
+      clearTimeout(trackSnapTimerRef.current)
+      trackSnapTimerRef.current = null
+    }
+  }, [cancelSnapAnimation])
+
+  const onTrackUserIntent = useCallback(() => {
+    trackGestureRef.current += 1
+    trackUserScrollRef.current = true
+    scrubberDroveRef.current = false
+    interruptTimeline()
+  }, [interruptTimeline])
+
+  const onTrackPointerDown = onTrackUserIntent
+
+  const onTrackWheel = useCallback(
+    (event: React.WheelEvent) => {
+      if (Math.abs(event.deltaX) < Math.abs(event.deltaY)) return
+      onTrackUserIntent()
+    },
+    [onTrackUserIntent],
+  )
+
+  const onTimelineShellPointerDownCapture = useCallback(() => {
+    interruptTimeline()
+  }, [interruptTimeline])
 
   useEffect(() => {
     const track = trackRef.current
     if (!track) return
 
     const onScrollEnd = () => {
-      if (snapAnimatingRef.current) return
+      if (scrubberActiveRef.current || scrubberDroveRef.current) return
+
+      trackUserScrollRef.current = false
+      const gesture = trackGestureRef.current
 
       if (trackSnapTimerRef.current) {
         clearTimeout(trackSnapTimerRef.current)
         trackSnapTimerRef.current = null
       }
-      snapTrackToTick()
+
+      window.setTimeout(() => {
+        if (trackGestureRef.current !== gesture) return
+        if (scrubberActiveRef.current || scrubberDroveRef.current) return
+        snapTrackToTick()
+      }, 0)
     }
 
     track.addEventListener('scrollend', onScrollEnd)
@@ -440,7 +516,10 @@ function App() {
             ) : null}
           </div>
 
-          <footer className="timeline-shell">
+          <footer
+            className="timeline-shell"
+            onPointerDownCapture={onTimelineShellPointerDownCapture}
+          >
           <motion.div
             ref={trackRef}
             className="timeline-track"
@@ -448,6 +527,8 @@ function App() {
             role="list"
             aria-label="Photo timeline"
             onScroll={onTrackScroll}
+            onPointerDown={onTrackPointerDown}
+            onWheel={onTrackWheel}
           >
             <div ref={trackContentRef} className="timeline-track__content">
             {photos.map((photo) => {
@@ -492,15 +573,24 @@ function App() {
               scrollRatio={scrollRatio}
               onScrub={scrubTimeline}
               readScrollRatio={readScrollRatio}
+              abortRef={scrubberAbortRef}
               onDragActive={(active) => {
                 scrubberActiveRef.current = active
                 if (active) {
+                  scrubberDroveRef.current = true
+                  ignoreScrollSyncRef.current = true
                   cancelSnapAnimation()
                   if (trackSnapTimerRef.current) {
                     clearTimeout(trackSnapTimerRef.current)
                     trackSnapTimerRef.current = null
                   }
+                  return
                 }
+                requestAnimationFrame(() => {
+                  if (!scrubberActiveRef.current) {
+                    ignoreScrollSyncRef.current = false
+                  }
+                })
               }}
               photos={photos}
             />
