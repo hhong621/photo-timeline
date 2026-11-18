@@ -51,24 +51,35 @@ export function buildTimelineMarkers(photos: Photo[]) {
     const month = cursor.getMonth()
     if (month !== 0) {
       const ms = cursor.getTime()
-      minorMarkers.push({
-        key: `m-${cursor.getFullYear()}-${month}`,
-        ratio: msToRatio(ms, minMs, spanMs),
-        mid: month % 3 === 0,
-      })
+      if (ms >= minMs) {
+        minorMarkers.push({
+          key: `m-${cursor.getFullYear()}-${month}`,
+          ratio: msToRatio(ms, minMs, spanMs),
+          mid: month % 3 === 0,
+        })
+      }
     }
     cursor.setMonth(cursor.getMonth() + 1)
   }
 
+  const approxMonthRatio = (30.4375 * 24 * 60 * 60 * 1000) / spanMs
+  const majorMinorMinGap = approxMonthRatio * 1.45
+  const majorRatios = majorMarkers.map((m) => m.ratio)
+  const spacedMinorMarkers = minorMarkers.filter((minor) =>
+    majorRatios.every(
+      (major) => Math.abs(minor.ratio - major) >= majorMinorMinGap,
+    ),
+  )
+
   const snapRatios = [
     ...majorMarkers.map((m) => m.ratio),
-    ...minorMarkers.map((m) => m.ratio),
+    ...spacedMinorMarkers.map((m) => m.ratio),
   ].sort((a, b) => a - b)
 
   return {
     majorMarkers,
-    minorMarkers,
-    monthCount: minorMarkers.length + majorMarkers.length,
+    minorMarkers: spacedMinorMarkers,
+    monthCount: spacedMinorMarkers.length + majorMarkers.length,
     snapRatios,
   }
 }
