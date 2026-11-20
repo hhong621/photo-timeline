@@ -87,3 +87,33 @@ export function buildTimelineMarkers(photos: Photo[]) {
 export function getTimelineSnapRatios(photos: Photo[]) {
   return buildTimelineMarkers(photos).snapRatios
 }
+
+/** Month + year tick positions shown on the time scrubber band. */
+export function getTimelineTickRatios(photos: Photo[]) {
+  const { majorMarkers, minorMarkers } = buildTimelineMarkers(photos)
+  return [
+    ...majorMarkers.map((m) => m.ratio),
+    ...minorMarkers.map((m) => m.ratio),
+  ].sort((a, b) => a - b)
+}
+
+/** Tick ratios the playhead crossed moving from `prev` to `next` along the timeline. */
+export function getCrossedTickRatios(
+  prev: number,
+  next: number,
+  tickRatios: number[],
+) {
+  if (prev === next || tickRatios.length === 0) return []
+
+  const crossed: number[] = []
+  if (next > prev) {
+    for (const tick of tickRatios) {
+      if (tick > prev && tick <= next) crossed.push(tick)
+    }
+  } else {
+    for (const tick of tickRatios) {
+      if (tick < prev && tick >= next) crossed.push(tick)
+    }
+  }
+  return crossed
+}

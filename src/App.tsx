@@ -1,13 +1,22 @@
 import { AnimatePresence, LayoutGroup, MotionConfig,motion } from 'motion/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { SpeakerHigh, SpeakerSlash, X } from '@phosphor-icons/react'
+import { ensureAudioRunning, playSound, setSoundMuted } from './audio'
+import { sounds } from './audio/sounds'
 import { photos, type Photo } from './photos'
 import { TimeScrubber } from './TimeScrubber'
-import { getTimelineSnapRatios, nearestSnapRatio } from './timelineScale'
+import {
+  getCrossedTickRatios,
+  getTimelineSnapRatios,
+  getTimelineTickRatios,
+  nearestSnapRatio,
+} from './timelineScale'
 
 const SNAP_SCROLL_MS = 300
 const TRACK_SNAP_IDLE_MS = 160
 const EDGE_SNAP_EPSILON = 1 / 1200
+const THUMB_CLICK_SLOP_PX = 8
 
 function easeOutCubic(t: number) {
   return 1 - (1 - t) ** 3
@@ -110,6 +119,7 @@ function App() {
   const [stageOpen, setStageOpen] = useState(false)
   const [scrollRatio, setScrollRatio] = useState(0)
   const [canScrub, setCanScrub] = useState(false)
+  const [soundMuted, setSoundMutedState] = useState(false)
   const trackRef = useRef<HTMLDivElement>(null)
   const trackContentRef = useRef<HTMLDivElement>(null)
   const closeRequestedRef = useRef(false)
@@ -124,6 +134,51 @@ function App() {
   const snapAnimatingRef = useRef(false)
   const scrollAnimRef = useRef<number | null>(null)
   const snapRatios = useMemo(() => getTimelineSnapRatios(photos), [])
+  const tickRatios = useMemo(() => getTimelineTickRatios(photos), [])
+  const timelineRatioRef = useRef<number | null>(null)
+
+  const emitTimelineRatio = useCallback(
+    (ratio: number) => {
+      const clamped = Math.min(1, Math.max(0, ratio))
+      const prev = timelineRatioRef.current
+      timelineRatioRef.current = clamped
+      if (prev === null) return
+
+      const crossed = getCrossedTickRatios(prev, clamped, tickRatios)
+      if (crossed.length === 0) return
+
+      const ctx = ensureAudioRunning()
+      for (let i = 0; i < crossed.length; i += 1) {
+        playSound(ctx, sounds.timelineTick)
+      }
+    },
+    [tickRatios],
+  )
+
+  const thumbPointerRef = useRef({
+    pointerId: -1,
+    x: 0,
+    y: 0,
+  })
+
+  const onThumbPointerDown = useCallback((event: React.PointerEvent) => {
+    thumbPointerRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    }
+  }, [])
+
+  const onThumbPointerUp = useCallback((event: React.PointerEvent) => {
+    const start = thumbPointerRef.current
+    if (start.pointerId !== event.pointerId) return
+
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (dx * dx + dy * dy > THUMB_CLICK_SLOP_PX * THUMB_CLICK_SLOP_PX) return
+
+    playSound(ensureAudioRunning(), sounds.f5)
+  }, [])
 
   const cancelSnapAnimation = useCallback(() => {
     if (scrollAnimRef.current !== null) {
@@ -153,9 +208,11 @@ function App() {
 
     const maxScroll = track.scrollWidth - track.clientWidth
     const scrubbable = maxScroll > 1
+    const ratio = scrubbable ? track.scrollLeft / maxScroll : 0
     setCanScrub(scrubbable)
-    setScrollRatio(scrubbable ? track.scrollLeft / maxScroll : 0)
-  }, [])
+    emitTimelineRatio(ratio)
+    setScrollRatio(ratio)
+  }, [emitTimelineRatio])
 
   const scrubTimeline = useCallback(
     (ratio: number, commit = true, smooth = false) => {
@@ -173,6 +230,7 @@ function App() {
           cancelSnapAnimation()
         }
         track.scrollLeft = targetLeft
+        emitTimelineRatio(clamped)
         if (commit) {
           setScrollRatio(clamped)
         }
@@ -187,6 +245,7 @@ function App() {
 
       const startLeft = track.scrollLeft
       if (Math.abs(startLeft - targetLeft) < 0.5) {
+        emitTimelineRatio(clamped)
         if (commit) setScrollRatio(clamped)
         return
       }
@@ -212,8 +271,10 @@ function App() {
         const nextLeft = startLeft + (targetLeft - startLeft) * eased
 
         track.scrollLeft = nextLeft
+        const frameRatio = nextLeft / maxScroll
+        emitTimelineRatio(frameRatio)
         if (commit) {
-          setScrollRatio(nextLeft / maxScroll)
+          setScrollRatio(frameRatio)
         }
 
         if (progress < 1) {
@@ -224,6 +285,7 @@ function App() {
         scrollAnimRef.current = null
         snapAnimatingRef.current = false
         track.scrollLeft = targetLeft
+        emitTimelineRatio(clamped)
         if (commit) {
           setScrollRatio(clamped)
         }
@@ -231,7 +293,7 @@ function App() {
 
       scrollAnimRef.current = requestAnimationFrame(step)
     },
-    [cancelSnapAnimation],
+    [cancelSnapAnimation, emitTimelineRatio],
   )
 
   const snapTrackToTick = useCallback(() => {
@@ -365,6 +427,14 @@ function App() {
     setSelected(null)
   }, [])
 
+  const toggleSoundMute = useCallback(() => {
+    setSoundMutedState((prev) => {
+      const next = !prev
+      setSoundMuted(next)
+      return next
+    })
+  }, [])
+
   const close = useCallback(() => {
     closeRequestedRef.current = true
     setShowMeta(false)
@@ -448,7 +518,8 @@ function App() {
                 animate={{ opacity: selected ? 0 : 1 }}
                 transition={{ duration: 0.2 }}
               >
-                Select a photo from the timeline
+                A collection of my favorite photos arranged by time
+                <span className='by-line'>Made by <a href='https://hhong621.github.io/work/' target='_blank'>Harrison</a></span>
               </motion.p>
             </main>
             <div
@@ -469,7 +540,7 @@ function App() {
                 aria-label={selected?.label}
                 aria-hidden={selected ? undefined : true}
               >
-                <AnimatePresence mode="sync" initial={false}>
+                <AnimatePresence mode="popLayout" initial={false}>
                   {selected ? (
                     <motion.div
                       key={selected.id}
@@ -504,22 +575,27 @@ function App() {
                 whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.2, ease: 'easeOut' }}
               >
-                <svg
-                  className="hero-close__icon"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M6 6l12 12M18 6 6 18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                <X className="hero-close__icon" size={18} weight="bold" aria-hidden />
               </motion.button>
             ) : null}
           </div>
+
+          <motion.button
+            type="button"
+            className="sound-mute"
+            onClick={toggleSoundMute}
+            aria-label={soundMuted ? 'Unmute sounds' : 'Mute sounds'}
+            aria-pressed={soundMuted}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+          >
+            {soundMuted ? (
+              <SpeakerSlash className="sound-mute__icon" size={18} weight="bold" aria-hidden />
+            ) : (
+              <SpeakerHigh className="sound-mute__icon" size={18} weight="bold" aria-hidden />
+            )}
+          </motion.button>
 
           <footer
             className="timeline-shell"
@@ -546,6 +622,8 @@ function App() {
                   role="listitem"
                   className={`timeline-item${isSelected ? ' timeline-item--selected' : ''}`}
                   onClick={() => setSelected(photo)}
+                  onPointerDown={onThumbPointerDown}
+                  onPointerUp={onThumbPointerUp}
                   aria-pressed={isSelected}
                   aria-label={`${photo.label}, ${photo.date}`}
                   whileHover={{ translateY: 'calc(-1 * var(--timeline-hover-lift))' }}

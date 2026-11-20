@@ -11,6 +11,7 @@
   --hero-max-width: var(--hero-landscape-width);
   --hero-max-height: min(calc(100svh - var(--stage-chrome)), 720px);
   --accent: #52525b;
+  --link: #004eb0;
   --scrollbar: rgba(0, 0, 0, 0.2);
 
   font-family:
