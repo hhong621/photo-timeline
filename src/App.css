@@ -218,8 +218,8 @@
     0 0 1px rgba(0, 0, 0, 0.25), 
     0 1px 2px rgba(0, 0, 0, 0.16);
   transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease;
+    background 0.15s var(--ease-out-quad),
+    box-shadow 0.15s var(--ease-out-quad);
 }
 
 .hero-close:hover {
@@ -252,9 +252,9 @@
     0 0 1px rgba(0, 0, 0, 0.25),
     0 1px 2px rgba(0, 0, 0, 0.14);
   transition:
-    background 0.15s ease,
-    box-shadow 0.15s ease,
-    color 0.15s ease;
+    background 0.15s var(--ease-out-quad),
+    box-shadow 0.15s var(--ease-out-quad),
+    color 0.15s var(--ease-out-quad);
 }
 
 .sound-mute:hover {

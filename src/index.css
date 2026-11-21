@@ -13,6 +13,8 @@
   --accent: #52525b;
   --link: #004eb0;
   --scrollbar: rgba(0, 0, 0, 0.2);
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
 
   font-family:
     system-ui,

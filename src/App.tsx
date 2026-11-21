@@ -6,6 +6,7 @@ import { ensureAudioRunning, playSound, setSoundMuted } from './audio'
 import { sounds } from './audio/sounds'
 import { photos, type Photo } from './photos'
 import { TimeScrubber } from './TimeScrubber'
+import { easeOutCubicAt, easeOutQuad } from './easing'
 import {
   getCrossedTickRatios,
   getTimelineSnapRatios,
@@ -17,10 +18,6 @@ const SNAP_SCROLL_MS = 300
 const TRACK_SNAP_IDLE_MS = 160
 const EDGE_SNAP_EPSILON = 1 / 1200
 const THUMB_CLICK_SLOP_PX = 8
-
-function easeOutCubic(t: number) {
-  return 1 - (1 - t) ** 3
-}
 
 function formatPhotoDate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -58,8 +55,8 @@ function HeroMeta({
       }}
       transition={
         visible
-          ? { duration: 0.2, ease: 'easeOut' }
-          : { duration: 0.05, ease: 'easeOut' }
+          ? { duration: 0.2, ease: easeOutQuad }
+          : { duration: 0.05, ease: easeOutQuad }
       }
       style={{ pointerEvents: visible ? 'auto' : 'none' }}
     >
@@ -267,7 +264,7 @@ function App() {
 
         const elapsed = now - startedAt
         const progress = Math.min(1, elapsed / SNAP_SCROLL_MS)
-        const eased = easeOutCubic(progress)
+        const eased = easeOutCubicAt(progress)
         const nextLeft = startLeft + (targetLeft - startLeft) * eased
 
         track.scrollLeft = nextLeft
@@ -573,7 +570,7 @@ function App() {
                 animate={{ opacity: 1 }}
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
+                transition={{ duration: 0.2, ease: easeOutQuad }}
               >
                 <X className="hero-close__icon" size={18} weight="bold" aria-hidden />
               </motion.button>
@@ -588,7 +585,7 @@ function App() {
             aria-pressed={soundMuted}
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            transition={{ duration: 0.2, ease: easeOutQuad }}
           >
             {soundMuted ? (
               <SpeakerSlash className="sound-mute__icon" size={18} weight="bold" aria-hidden />
