@@ -114,6 +114,7 @@ function App() {
   const [selected, setSelected] = useState<Photo | null>(null)
   const [showMeta, setShowMeta] = useState(false)
   const [stageOpen, setStageOpen] = useState(false)
+  const [heroLayoutSettled, setHeroLayoutSettled] = useState(false)
   const [scrollRatio, setScrollRatio] = useState(0)
   const [canScrub, setCanScrub] = useState(false)
   const [soundMuted, setSoundMutedState] = useState(false)
@@ -446,11 +447,16 @@ function App() {
     if (selected) {
       closeRequestedRef.current = false
       setStageOpen(true)
+      setHeroLayoutSettled(false)
       setShowMeta(true)
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current)
         closeTimerRef.current = null
       }
+      const layoutFallback = window.setTimeout(() => {
+        setHeroLayoutSettled((settled) => settled || true)
+      }, 700)
+      return () => clearTimeout(layoutFallback)
     }
   }, [selected?.id])
 
@@ -463,6 +469,7 @@ function App() {
   useEffect(() => {
     if (!selected) {
       setShowMeta(false)
+      setHeroLayoutSettled(false)
     }
   }, [selected])
 
@@ -470,7 +477,10 @@ function App() {
     if (closeRequestedRef.current) {
       setStageOpen(false)
       closeRequestedRef.current = false
+      setHeroLayoutSettled(false)
+      return
     }
+    setHeroLayoutSettled(true)
   }, [])
 
   useEffect(() => {
@@ -531,35 +541,37 @@ function App() {
                 />
               ) : null}
               <div
-                className="expand-hero"
+                className={`expand-hero${heroLayoutSettled ? ' expand-hero--layout-settled' : ''}`}
                 role={selected ? 'dialog' : undefined}
                 aria-modal="false"
                 aria-label={selected?.label}
                 aria-hidden={selected ? undefined : true}
               >
-                <AnimatePresence mode="popLayout" initial={false}>
+                <div className="hero-stack">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    {selected ? (
+                      <motion.div
+                        key={selected.id}
+                        className="hero-wrap photo-shell"
+                        layoutId={selected.id}
+                        onLayoutAnimationComplete={onHeroLayoutComplete}
+                      >
+                        <PhotoFrame photo={selected} variant="hero" />
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
                   {selected ? (
-                    <motion.div
-                      key={selected.id}
-                      className="hero-wrap photo-shell"
-                      layoutId={selected.id}
-                      onLayoutAnimationComplete={onHeroLayoutComplete}
-                    >
-                      <PhotoFrame photo={selected} variant="hero" />
-                    </motion.div>
+                    <div className="hero-meta-panel">
+                      <HeroMeta
+                        key={selected.id}
+                        photo={selected}
+                        visible={showMeta && heroLayoutSettled}
+                      />
+                    </div>
                   ) : null}
-                </AnimatePresence>
+                </div>
               </div>
             </div>
-            {selected ? (
-              <div className="hero-meta-panel">
-                <HeroMeta
-                  key={selected.id}
-                  photo={selected}
-                  visible={showMeta}
-                />
-              </div>
-            ) : null}
             {selected ? (
               <motion.button
                 type="button"
