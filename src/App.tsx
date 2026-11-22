@@ -142,6 +142,7 @@ function App() {
   const [selected, setSelected] = useState<Photo | null>(null)
   const [showMeta, setShowMeta] = useState(false)
   const [stageOpen, setStageOpen] = useState(false)
+  const [layoutPhotoId, setLayoutPhotoId] = useState<string | null>(null)
   const [heroLayoutSettled, setHeroLayoutSettled] = useState(false)
   const [scrollRatio, setScrollRatio] = useState(0)
   const [canScrub, setCanScrub] = useState(false)
@@ -474,6 +475,7 @@ function App() {
   useEffect(() => {
     if (selected) {
       closeRequestedRef.current = false
+      setLayoutPhotoId(selected.id)
       setStageOpen(true)
       setHeroLayoutSettled(!isMobileHeroLayout)
       setShowMeta(true)
@@ -502,7 +504,13 @@ function App() {
     }
   }, [selected])
 
-  const onHeroLayoutComplete = useCallback(() => {
+  useEffect(() => {
+    if (!stageOpen) {
+      setLayoutPhotoId(null)
+    }
+  }, [stageOpen])
+
+  const onSharedLayoutComplete = useCallback(() => {
     if (closeRequestedRef.current) {
       setStageOpen(false)
       closeRequestedRef.current = false
@@ -513,6 +521,24 @@ function App() {
       setHeroLayoutSettled(true)
     }
   }, [isMobileHeroLayout])
+
+  const onThumbSharedLayoutComplete = useCallback(
+    (photoId: string) => {
+      if (layoutPhotoId !== photoId) return
+      onSharedLayoutComplete()
+    },
+    [layoutPhotoId, onSharedLayoutComplete],
+  )
+
+  useEffect(() => {
+    if (selected || !stageOpen) return
+    const stageFallback = window.setTimeout(() => {
+      setStageOpen(false)
+      closeRequestedRef.current = false
+      setHeroLayoutSettled(false)
+    }, 900)
+    return () => clearTimeout(stageFallback)
+  }, [selected, stageOpen])
 
   useEffect(() => {
     const track = trackRef.current
@@ -585,7 +611,7 @@ function App() {
                         key={selected.id}
                         className="hero-wrap photo-shell"
                         layoutId={selected.id}
-                        onLayoutAnimationComplete={onHeroLayoutComplete}
+                        onLayoutAnimationComplete={onSharedLayoutComplete}
                       >
                         <PhotoFrame photo={selected} variant="hero" />
                       </motion.div>
@@ -656,39 +682,42 @@ function App() {
             <div ref={trackContentRef} className="timeline-track__content">
             {photos.map((photo) => {
               const isSelected = selected?.id === photo.id
+              const isMorphing =
+                layoutPhotoId === photo.id && stageOpen
+              const useLayoutThumbAsset = isMorphing
 
               return (
-                <motion.button
+                <button
                   key={photo.id}
                   type="button"
                   role="listitem"
-                  className={`timeline-item${isSelected ? ' timeline-item--selected' : ''}`}
+                  className={`timeline-item${isSelected ? ' timeline-item--selected' : ''}${isMorphing ? ' timeline-item--layout-source' : ''}`}
                   onClick={() => setSelected(photo)}
                   onPointerDown={onThumbPointerDown}
                   onPointerUp={onThumbPointerUp}
                   aria-pressed={isSelected}
                   aria-label={`${photo.label}, ${photo.date}`}
-                  whileHover={{ translateY: 'calc(-1 * var(--timeline-hover-lift))' }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{
-                    type: 'spring',
-                    stiffness: 300,
-                    damping: 25,
-                    mass: 0.8,
-                  }}
-                  layout={false}
                 >
-                  <motion.div
-                    className="timeline-item__media photo-shell"
-                    layoutId={photo.id}
-                  >
-                    <PhotoFrame
-                      photo={photo}
-                      variant="thumb"
-                      useHeroSrc={isSelected}
-                    />
-                  </motion.div>
-                </motion.button>
+                  <div className="timeline-item__slot">
+                    <div className="timeline-item__lift">
+                      <motion.div
+                        className="timeline-item__media photo-shell"
+                        layoutId={photo.id}
+                        onLayoutAnimationComplete={
+                          layoutPhotoId === photo.id
+                            ? () => onThumbSharedLayoutComplete(photo.id)
+                            : undefined
+                        }
+                      >
+                        <PhotoFrame
+                          photo={photo}
+                          variant="thumb"
+                          useHeroSrc={useLayoutThumbAsset}
+                        />
+                      </motion.div>
+                    </div>
+                  </div>
+                </button>
               )
             })}
             </div>
