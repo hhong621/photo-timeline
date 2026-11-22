@@ -1,5 +1,12 @@
 import { AnimatePresence, LayoutGroup, MotionConfig,motion } from 'motion/react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import './App.css'
 import { SpeakerHigh, SpeakerSlash, X } from '@phosphor-icons/react'
 import { ensureAudioRunning, playSound, setSoundMuted } from './audio'
@@ -18,6 +25,26 @@ const SNAP_SCROLL_MS = 300
 const TRACK_SNAP_IDLE_MS = 160
 const EDGE_SNAP_EPSILON = 1 / 1200
 const THUMB_CLICK_SLOP_PX = 8
+/** Keep in sync with `@media (max-width: 640px)` in `App.css`. */
+const MOBILE_HERO_LAYOUT_MQ = '(max-width: 640px)'
+
+function subscribeMobileHeroLayout(onChange: () => void) {
+  const mq = window.matchMedia(MOBILE_HERO_LAYOUT_MQ)
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
+}
+
+function getMobileHeroLayoutSnapshot() {
+  return window.matchMedia(MOBILE_HERO_LAYOUT_MQ).matches
+}
+
+function useMobileHeroLayout() {
+  return useSyncExternalStore(
+    subscribeMobileHeroLayout,
+    getMobileHeroLayoutSnapshot,
+    () => false,
+  )
+}
 
 function formatPhotoDate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
@@ -111,6 +138,7 @@ function PhotoFrame({
 }
 
 function App() {
+  const isMobileHeroLayout = useMobileHeroLayout()
   const [selected, setSelected] = useState<Photo | null>(null)
   const [showMeta, setShowMeta] = useState(false)
   const [stageOpen, setStageOpen] = useState(false)
@@ -447,18 +475,19 @@ function App() {
     if (selected) {
       closeRequestedRef.current = false
       setStageOpen(true)
-      setHeroLayoutSettled(false)
+      setHeroLayoutSettled(!isMobileHeroLayout)
       setShowMeta(true)
       if (closeTimerRef.current) {
         clearTimeout(closeTimerRef.current)
         closeTimerRef.current = null
       }
+      if (!isMobileHeroLayout) return
       const layoutFallback = window.setTimeout(() => {
         setHeroLayoutSettled((settled) => settled || true)
       }, 700)
       return () => clearTimeout(layoutFallback)
     }
-  }, [selected?.id])
+  }, [selected?.id, isMobileHeroLayout])
 
   useEffect(() => {
     return () => {
@@ -480,8 +509,10 @@ function App() {
       setHeroLayoutSettled(false)
       return
     }
-    setHeroLayoutSettled(true)
-  }, [])
+    if (isMobileHeroLayout) {
+      setHeroLayoutSettled(true)
+    }
+  }, [isMobileHeroLayout])
 
   useEffect(() => {
     const track = trackRef.current
@@ -541,7 +572,7 @@ function App() {
                 />
               ) : null}
               <div
-                className={`expand-hero${heroLayoutSettled ? ' expand-hero--layout-settled' : ''}`}
+                className={`expand-hero${!isMobileHeroLayout || heroLayoutSettled ? ' expand-hero--layout-settled' : ''}`}
                 role={selected ? 'dialog' : undefined}
                 aria-modal="false"
                 aria-label={selected?.label}
@@ -565,7 +596,9 @@ function App() {
                       <HeroMeta
                         key={selected.id}
                         photo={selected}
-                        visible={showMeta && heroLayoutSettled}
+                        visible={
+                          showMeta && (!isMobileHeroLayout || heroLayoutSettled)
+                        }
                       />
                     </div>
                   ) : null}
