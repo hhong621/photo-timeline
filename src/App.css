@@ -72,6 +72,7 @@
   padding: inherit;
   font-size: 0.95rem;
   color: var(--text-h);
+  text-wrap: balance;
   text-align: center;
   pointer-events: none;
   z-index: 0;
